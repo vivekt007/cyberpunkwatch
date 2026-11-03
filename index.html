@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <meta name="theme-color" content="#f5f5f2">
+
+    <title>Cyberpunk Watch</title>
+
+    <meta
+        name="description"
+        content="Send a message across the internet and watch it appear on a real digital watch."
+    >
+
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+    <header class="navbar">
+        <a href="#" class="logo">
+            CYBERPUNK WATCH<span>.</span>
+        </a>
+
+        <div class="live-status">
+            <span class="status-dot"></span>
+            WATCH ONLINE
+        </div>
+    </header>
+
+
+    <main>
+
+        <!-- HERO SECTION -->
+
+        <section class="hero">
+
+            <div class="hero-label">
+                <span class="hero-line"></span>
+                A SMALL EXPERIMENT IN CONNECTIVITY
+            </div>
+
+            <h1>
+                A little message.
+                <span>A real display.</span>
+            </h1>
+
+            <p class="hero-description">
+                What if you could send a message from anywhere
+                in the world and watch it appear on a physical
+                digital watch?
+            </p>
+
+        </section>
+
+
+        <!-- MESSAGE FORM -->
+
+        <section class="message-section">
+
+            <div class="form-header">
+
+                <div>
+                    <p class="section-label">THE MESSAGE TERMINAL</p>
+
+                    <h2>Send to the watch.</h2>
+
+                    <p class="form-description">
+                        Leave something worth displaying.
+                    </p>
+                </div>
+
+                <div class="form-number">
+                    01 / 01
+                </div>
+
+            </div>
+
+
+            <form id="messageForm">
+
+                <div class="input-group">
+
+                    <div class="label-row">
+                        <label for="name">YOUR NAME</label>
+                        <span>01</span>
+                    </div>
+
+                    <input
+                        type="text"
+                        id="name"
+                        name="name"
+                        placeholder="Enter your name"
+                        maxlength="60"
+                        required
+                        autocomplete="name"
+                    >
+
+                    <div class="character-count">
+                        <span id="nameCount">0</span> / 60
+                    </div>
+
+                </div>
+
+
+                <div class="input-group">
+
+                    <div class="label-row">
+                        <label for="message">YOUR MESSAGE</label>
+                        <span>02</span>
+                    </div>
+
+                    <input
+                        type="text"
+                        id="message"
+                        name="message"
+                        placeholder="Write something meaningful..."
+                        maxlength="60"
+                        required
+                    >
+
+                    <div class="character-count">
+                        <span id="messageCount">0</span> / 60
+                    </div>
+
+                </div>
+
+
+                <button type="submit" id="sendButton">
+
+                    <span id="buttonText">SEND TO WATCH</span>
+
+                    <span class="button-arrow">↗</span>
+
+                </button>
+
+            </form>
+
+
+            <!-- STATUS -->
+
+            <div class="feedback" id="feedback">
+
+                <span class="feedback-dot"></span>
+
+                <span id="statusText">
+                    Ready to receive your message.
+                </span>
+
+            </div>
+
+
+            <div class="countdown-wrapper" id="countdownWrapper">
+
+                <div class="countdown-info">
+                    <span>MESSAGE DISPLAY TIME</span>
+                    <span id="countdown">30s</span>
+                </div>
+
+                <div class="progress-track">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- INFORMATION SECTION -->
+
+        <section class="information">
+
+            <div class="info-item">
+
+                <span class="info-number">01</span>
+
+                <h3>Write</h3>
+
+                <p>
+                    Enter your name and a short message.
+                </p>
+
+            </div>
+
+
+            <div class="info-item">
+
+                <span class="info-number">02</span>
+
+                <h3>Send</h3>
+
+                <p>
+                    Your message travels through the internet.
+                </p>
+
+            </div>
+
+
+            <div class="info-item">
+
+                <span class="info-number">03</span>
+
+                <h3>Appear</h3>
+
+                <p>
+                    Watch your message appear on a real LCD.
+                </p>
+
+            </div>
+
+        </section>
+
+    </main>
+
+
+    <!-- FOOTER -->
+
+    <footer>
+
+        <a href="#" class="footer-logo">
+            CYBERPUNK WATCH<span>.</span>
+        </a>
+
+        <p>
+            BUILT WITH CURIOSITY.
+        </p>
+
+        <span class="copyright">
+            © 2026
+        </span>
+
+    </footer>
+
+
+    <script src="js/script.js"></script>
+
+</body>
+
+</html>

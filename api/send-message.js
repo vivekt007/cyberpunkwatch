@@ -1,4 +1,3 @@
-
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -6,43 +5,7 @@ const supabase = createClient(
   process.env.SUPABASE_SECRET_KEY
 );
 
-// These must match the Arduino sketch.
-const SCROLL_INTERVAL_MS = 300;
-const SUPABASE_POLL_INTERVAL_MS = 3000;
-const NETWORK_BUFFER_MS = 1000;
-
-// Calculate the time required for one complete LCD scroll.
-function calculateMessageDuration(name, message) {
-  // Arduino text:
-  // 16 leading spaces + name + ": " + message + 16 trailing spaces.
-  //
-  // Arduino String.length() counts UTF-8 bytes, so use byte length
-  // here to keep the Vercel calculation consistent.
-
-  const nameLength = Buffer.byteLength(name, "utf8");
-  const messageLength = Buffer.byteLength(message, "utf8");
-
-  const scrollingLength =
-    16 + nameLength + 2 + messageLength + 16;
-
-  const scrollSteps = Math.max(
-    0,
-    scrollingLength - 15
-  );
-
-  return scrollSteps * SCROLL_INTERVAL_MS;
-}
-
-// Calculate the server-side cooldown.
-// The extra time allows the ESP8266 to receive the message
-// before another message is accepted.
-function calculateCooldown(name, message) {
-  return (
-    calculateMessageDuration(name, message) +
-    SUPABASE_POLL_INTERVAL_MS +
-    NETWORK_BUFFER_MS
-  );
-}
+const COOLDOWN_SECONDS = 30;
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -69,13 +32,10 @@ export default async function handler(req, res) {
       });
     }
 
-    const cleanName = name.trim();
-    const cleanMessage = message.trim();
-
-    // Read the currently stored message.
+    // Check whether the watch is still in its cooldown period.
     const { data: current, error: readError } = await supabase
       .from("watch_message")
-      .select("name, message, updated_at")
+      .select("updated_at")
       .eq("id", 1)
       .single();
 
@@ -83,57 +43,26 @@ export default async function handler(req, res) {
       throw readError;
     }
 
-    // Calculate how long the previous message needs to scroll.
-    const previousName = current.name || "Be";
-    const previousMessage = current.message || "kind";
-
-    const previousCooldown = calculateCooldown(
-      previousName,
-      previousMessage
-    );
-
     const lastUpdated = new Date(current.updated_at).getTime();
-
-    if (!Number.isFinite(lastUpdated)) {
-      throw new Error("Invalid updated_at timestamp in Supabase.");
-    }
-
-    const elapsedMilliseconds = Math.max(
-      0,
-      Date.now() - lastUpdated
-    );
-
-    const remainingMilliseconds = Math.max(
-      0,
-      previousCooldown - elapsedMilliseconds
-    );
-
+    const elapsedSeconds = (Date.now() - lastUpdated) / 1000;
     const remainingSeconds = Math.ceil(
-      remainingMilliseconds / 1000
+      COOLDOWN_SECONDS - elapsedSeconds
     );
 
-    // Prevent another message until the previous one has
-    // completed its full scroll and the polling allowance has passed.
-    if (remainingMilliseconds > 0) {
+    if (remainingSeconds > 0) {
       return res.status(429).json({
         success: false,
-        message: "The previous message is still being displayed. Please wait.",
+        message: "Someone has recently sent a message. Please wait.",
         remainingSeconds
       });
     }
 
-    // Calculate the new message's cooldown.
-    const newCooldown = calculateCooldown(
-      cleanName,
-      cleanMessage
-    );
-
-    // Store the new message.
+    // Send the new message to Supabase.
     const { error: updateError } = await supabase
       .from("watch_message")
       .update({
-        name: cleanName,
-        message: cleanMessage,
+        name: name.trim(),
+        message: message.trim(),
         updated_at: new Date().toISOString()
       })
       .eq("id", 1);
@@ -145,7 +74,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       message: "Your message has been sent to the watch!",
-      cooldownSeconds: Math.ceil(newCooldown / 1000)
+      cooldownSeconds: COOLDOWN_SECONDS
     });
 
   } catch (error) {

@@ -1,3 +1,4 @@
+
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -5,9 +6,8 @@ const supabase = createClient(
   process.env.SUPABASE_SECRET_KEY
 );
 
-const COOLDOWN_SECONDS = 30;
-
 export default async function handler(req, res) {
+
   if (req.method !== "POST") {
     return res.status(405).json({
       success: false,
@@ -16,6 +16,7 @@ export default async function handler(req, res) {
   }
 
   try {
+
     const { name, message } = req.body || {};
 
     if (
@@ -32,32 +33,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // Check whether the watch is still in its cooldown period.
-    const { data: current, error: readError } = await supabase
-      .from("watch_message")
-      .select("updated_at")
-      .eq("id", 1)
-      .single();
-
-    if (readError) {
-      throw readError;
-    }
-
-    const lastUpdated = new Date(current.updated_at).getTime();
-    const elapsedSeconds = (Date.now() - lastUpdated) / 1000;
-    const remainingSeconds = Math.ceil(
-      COOLDOWN_SECONDS - elapsedSeconds
-    );
-
-    if (remainingSeconds > 0) {
-      return res.status(429).json({
-        success: false,
-        message: "Someone has recently sent a message. Please wait.",
-        remainingSeconds
-      });
-    }
-
-    // Send the new message to Supabase.
+    // Update the message in Supabase immediately.
     const { error: updateError } = await supabase
       .from("watch_message")
       .update({
@@ -73,16 +49,17 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       success: true,
-      message: "Your message has been sent to the watch!",
-      cooldownSeconds: COOLDOWN_SECONDS
+      message: "Your message has been sent to the watch!"
     });
 
   } catch (error) {
+
     console.error("Send message error:", error);
 
     return res.status(500).json({
       success: false,
       message: "Unable to send your message. Please try again."
     });
+
   }
 }

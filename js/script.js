@@ -17,21 +17,6 @@ const buttonText = document.getElementById("buttonText");
 const feedback = document.getElementById("feedback");
 const statusText = document.getElementById("statusText");
 
-const countdownWrapper = document.getElementById("countdownWrapper");
-const countdown = document.getElementById("countdown");
-const progressBar = document.getElementById("progressBar");
-
-
-// ------------------------------
-// CONFIGURATION
-// ------------------------------
-
-const MESSAGE_DURATION = 30;
-
-let countdownInterval = null;
-let remainingSeconds = 0;
-let countdownDuration = MESSAGE_DURATION;
-
 
 // ------------------------------
 // CHARACTER COUNTERS
@@ -59,112 +44,6 @@ function showStatus(message, type = "") {
     if (type) {
         feedback.classList.add(type);
     }
-
-}
-
-
-// ------------------------------
-// LOCK INPUTS
-// ------------------------------
-
-function setLocked(locked) {
-
-    nameInput.disabled = locked;
-    messageInput.disabled = locked;
-    sendButton.disabled = locked;
-
-}
-
-
-// ------------------------------
-// RESTORE DEFAULTS
-// ------------------------------
-
-function restoreFields() {
-
-    nameInput.value = "";
-    messageInput.value = "";
-
-    nameCount.textContent = "0";
-    messageCount.textContent = "0";
-
-}
-
-
-// ------------------------------
-// START COUNTDOWN
-// ------------------------------
-
-function startCountdown(
-    duration = MESSAGE_DURATION,
-    statusMessage = "Your message has been sent to the watch."
-) {
-
-    clearInterval(countdownInterval);
-
-    countdownDuration = duration;
-    remainingSeconds = duration;
-
-    setLocked(true);
-
-    countdownWrapper.classList.add("active");
-
-    showStatus(statusMessage, "success");
-
-    updateCountdown();
-
-    countdownInterval = setInterval(function () {
-
-        remainingSeconds--;
-
-        updateCountdown();
-
-        if (remainingSeconds <= 0) {
-
-            clearInterval(countdownInterval);
-
-            finishCountdown();
-
-        }
-
-    }, 1000);
-
-}
-
-
-// ------------------------------
-// UPDATE COUNTDOWN DISPLAY
-// ------------------------------
-
-function updateCountdown() {
-
-    countdown.textContent = remainingSeconds + "s";
-
-    const progress =
-        (remainingSeconds / countdownDuration) * 100;
-
-    progressBar.style.width = progress + "%";
-
-}
-
-
-// ------------------------------
-// FINISH COUNTDOWN
-// ------------------------------
-
-function finishCountdown() {
-
-    countdownWrapper.classList.remove("active");
-
-    setLocked(false);
-
-    restoreFields();
-
-    showStatus(
-        "Ready to receive a new message."
-    );
-
-    buttonText.textContent = "SEND TO WATCH";
 
 }
 
@@ -206,9 +85,9 @@ form.addEventListener("submit", async function (event) {
 
     }
 
-    // Prevent multiple submissions
+    // Prevent duplicate submissions while sending
 
-    setLocked(true);
+    sendButton.disabled = true;
 
     buttonText.textContent = "SENDING...";
 
@@ -241,32 +120,11 @@ form.addEventListener("submit", async function (event) {
 
         if (response.ok && data.success) {
 
-            const duration =
-                data.cooldownSeconds || MESSAGE_DURATION;
-
             buttonText.textContent = "SENT";
 
-            startCountdown(
-                duration,
-                data.message || "Your message has been sent to the watch."
-            );
-
-            return;
-
-        }
-
-        // Watch is currently in cooldown
-
-        if (response.status === 429) {
-
-            const duration =
-                data.remainingSeconds || MESSAGE_DURATION;
-
-            buttonText.textContent = "PLEASE WAIT";
-
-            startCountdown(
-                duration,
-                data.message || "Please wait before sending another message."
+            showStatus(
+                data.message || "Your message has been sent to the watch.",
+                "success"
             );
 
             return;
@@ -283,14 +141,21 @@ form.addEventListener("submit", async function (event) {
 
         console.error("Message submission error:", error);
 
-        setLocked(false);
-
         buttonText.textContent = "SEND TO WATCH";
 
         showStatus(
             error.message || "Something went wrong. Please try again.",
             "error"
         );
+
+    } finally {
+
+        sendButton.disabled = false;
+
+        // Keep the button ready for another message.
+        if (buttonText.textContent === "SENDING...") {
+            buttonText.textContent = "SEND TO WATCH";
+        }
 
     }
 

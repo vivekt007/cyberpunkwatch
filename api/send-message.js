@@ -6,28 +6,41 @@ const supabase = createClient(
   process.env.SUPABASE_SECRET_KEY
 );
 
-// Keep these values identical to the NodeMCU sketch.
+// These must match the Arduino sketch.
 const SCROLL_INTERVAL_MS = 300;
-const MINIMUM_DURATION_MS = 30000;
-const MAXIMUM_DURATION_MS = 45000;
-const MESSAGE_BUFFER_MS = 3300;
+const SUPABASE_POLL_INTERVAL_MS = 3000;
+const NETWORK_BUFFER_MS = 1000;
 
-// Calculate the display duration for a message.
+// Calculate the time required for one complete LCD scroll.
 function calculateMessageDuration(name, message) {
+  // Arduino text:
+  // 16 leading spaces + name + ": " + message + 16 trailing spaces.
+  //
+  // Arduino String.length() counts UTF-8 bytes, so use byte length
+  // here to keep the Vercel calculation consistent.
+
+  const nameLength = Buffer.byteLength(name, "utf8");
+  const messageLength = Buffer.byteLength(message, "utf8");
+
   const scrollingLength =
-    16 + name.length + 2 + message.length + 16;
+    16 + nameLength + 2 + messageLength + 16;
 
-  const scrollSteps = scrollingLength - 15;
+  const scrollSteps = Math.max(
+    0,
+    scrollingLength - 15
+  );
 
-  const completeScrollTime =
-    scrollSteps * SCROLL_INTERVAL_MS;
+  return scrollSteps * SCROLL_INTERVAL_MS;
+}
 
-  const calculatedDuration =
-    completeScrollTime + MESSAGE_BUFFER_MS;
-
-  return Math.min(
-    MAXIMUM_DURATION_MS,
-    Math.max(MINIMUM_DURATION_MS, calculatedDuration)
+// Calculate the server-side cooldown.
+// The extra time allows the ESP8266 to receive the message
+// before another message is accepted.
+function calculateCooldown(name, message) {
+  return (
+    calculateMessageDuration(name, message) +
+    SUPABASE_POLL_INTERVAL_MS +
+    NETWORK_BUFFER_MS
   );
 }
 
@@ -59,13 +72,7 @@ export default async function handler(req, res) {
     const cleanName = name.trim();
     const cleanMessage = message.trim();
 
-    // Calculate the duration required for the new message.
-    const newMessageDuration = calculateMessageDuration(
-      cleanName,
-      cleanMessage
-    );
-
-    // Read the currently displayed message.
+    // Read the currently stored message.
     const { data: current, error: readError } = await supabase
       .from("watch_message")
       .select("name, message, updated_at")
@@ -76,17 +83,20 @@ export default async function handler(req, res) {
       throw readError;
     }
 
-    // Calculate how long the previous message needs to be displayed.
+    // Calculate how long the previous message needs to scroll.
     const previousName = current.name || "Be";
     const previousMessage = current.message || "kind";
 
-    const previousMessageDuration = calculateMessageDuration(
+    const previousCooldown = calculateCooldown(
       previousName,
       previousMessage
     );
 
-    // Calculate the remaining cooldown for the previous message.
     const lastUpdated = new Date(current.updated_at).getTime();
+
+    if (!Number.isFinite(lastUpdated)) {
+      throw new Error("Invalid updated_at timestamp in Supabase.");
+    }
 
     const elapsedMilliseconds = Math.max(
       0,
@@ -95,24 +105,30 @@ export default async function handler(req, res) {
 
     const remainingMilliseconds = Math.max(
       0,
-      previousMessageDuration - elapsedMilliseconds
+      previousCooldown - elapsedMilliseconds
     );
 
     const remainingSeconds = Math.ceil(
       remainingMilliseconds / 1000
     );
 
-    // Prevent another message until the previous message's
-    // calculated display duration has finished.
-    if (remainingSeconds > 0) {
+    // Prevent another message until the previous one has
+    // completed its full scroll and the polling allowance has passed.
+    if (remainingMilliseconds > 0) {
       return res.status(429).json({
         success: false,
-        message: "Someone has recently sent a message. Please wait.",
+        message: "The previous message is still being displayed. Please wait.",
         remainingSeconds
       });
     }
 
-    // Send the new message to Supabase.
+    // Calculate the new message's cooldown.
+    const newCooldown = calculateCooldown(
+      cleanName,
+      cleanMessage
+    );
+
+    // Store the new message.
     const { error: updateError } = await supabase
       .from("watch_message")
       .update({
@@ -129,9 +145,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       message: "Your message has been sent to the watch!",
-      cooldownSeconds: Math.ceil(
-        newMessageDuration / 1000
-      )
+      cooldownSeconds: Math.ceil(newCooldown / 1000)
     });
 
   } catch (error) {

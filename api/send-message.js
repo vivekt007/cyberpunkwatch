@@ -1,3 +1,4 @@
+
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -5,7 +6,30 @@ const supabase = createClient(
   process.env.SUPABASE_SECRET_KEY
 );
 
-const COOLDOWN_SECONDS = 30;
+// Keep these values identical to the NodeMCU sketch.
+const SCROLL_INTERVAL_MS = 300;
+const MINIMUM_DURATION_MS = 30000;
+const MAXIMUM_DURATION_MS = 45000;
+const MESSAGE_BUFFER_MS = 3300;
+
+// Calculate the display duration for a message.
+function calculateMessageDuration(name, message) {
+  const scrollingLength =
+    16 + name.length + 2 + message.length + 16;
+
+  const scrollSteps = scrollingLength - 15;
+
+  const completeScrollTime =
+    scrollSteps * SCROLL_INTERVAL_MS;
+
+  const calculatedDuration =
+    completeScrollTime + MESSAGE_BUFFER_MS;
+
+  return Math.min(
+    MAXIMUM_DURATION_MS,
+    Math.max(MINIMUM_DURATION_MS, calculatedDuration)
+  );
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -32,10 +56,19 @@ export default async function handler(req, res) {
       });
     }
 
-    // Check whether the watch is still in its cooldown period.
+    const cleanName = name.trim();
+    const cleanMessage = message.trim();
+
+    // Calculate the duration required for the new message.
+    const newMessageDuration = calculateMessageDuration(
+      cleanName,
+      cleanMessage
+    );
+
+    // Read the currently displayed message.
     const { data: current, error: readError } = await supabase
       .from("watch_message")
-      .select("updated_at")
+      .select("name, message, updated_at")
       .eq("id", 1)
       .single();
 
@@ -43,12 +76,34 @@ export default async function handler(req, res) {
       throw readError;
     }
 
-    const lastUpdated = new Date(current.updated_at).getTime();
-    const elapsedSeconds = (Date.now() - lastUpdated) / 1000;
-    const remainingSeconds = Math.ceil(
-      COOLDOWN_SECONDS - elapsedSeconds
+    // Calculate how long the previous message needs to be displayed.
+    const previousName = current.name || "Be";
+    const previousMessage = current.message || "kind";
+
+    const previousMessageDuration = calculateMessageDuration(
+      previousName,
+      previousMessage
     );
 
+    // Calculate the remaining cooldown for the previous message.
+    const lastUpdated = new Date(current.updated_at).getTime();
+
+    const elapsedMilliseconds = Math.max(
+      0,
+      Date.now() - lastUpdated
+    );
+
+    const remainingMilliseconds = Math.max(
+      0,
+      previousMessageDuration - elapsedMilliseconds
+    );
+
+    const remainingSeconds = Math.ceil(
+      remainingMilliseconds / 1000
+    );
+
+    // Prevent another message until the previous message's
+    // calculated display duration has finished.
     if (remainingSeconds > 0) {
       return res.status(429).json({
         success: false,
@@ -61,8 +116,8 @@ export default async function handler(req, res) {
     const { error: updateError } = await supabase
       .from("watch_message")
       .update({
-        name: name.trim(),
-        message: message.trim(),
+        name: cleanName,
+        message: cleanMessage,
         updated_at: new Date().toISOString()
       })
       .eq("id", 1);
@@ -74,7 +129,9 @@ export default async function handler(req, res) {
     return res.status(200).json({
       success: true,
       message: "Your message has been sent to the watch!",
-      cooldownSeconds: COOLDOWN_SECONDS
+      cooldownSeconds: Math.ceil(
+        newMessageDuration / 1000
+      )
     });
 
   } catch (error) {
